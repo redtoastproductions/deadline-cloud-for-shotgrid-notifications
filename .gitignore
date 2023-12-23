@@ -1,0 +1,21 @@
+# Hatch version temp file
+*_version.py
+
+# build artifacts
+dist/
+build/
+
+*.egg-info/
+__pycache__/
+*.py[cod]
+.coverage
+.tox
+
+# virtualenv
+.venv
+venv/
+
+# IDE
+.vscode
+.idea/
+

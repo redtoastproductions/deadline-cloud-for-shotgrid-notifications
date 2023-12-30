@@ -1,0 +1,11 @@
+{
+    "deadline_cloud": {
+        "studio_hostnames": ["studio-name.region-name.deadlinecloud.amazonaws.com"]
+    },
+    "shotgrid": {
+        "url": "https://shotgrid-instance-name.shotgrid.autodesk.com",
+        "script_name": "DeadlineCloudNotifications",
+        "api_key": "EXAMPLE!EXAMPLE"
+    }
+}
+

@@ -20,7 +20,10 @@ log_handler.setFormatter(log_fmt)
 logger.addHandler(log_handler)
 
 
-DEADLINE_CLOUD_NOTIFICATIONS_PREFIX = "DeadlineCloud"
+DC_NOTIFICATIONS_PREFIX = "DeadlineCloud"
+DC_BUDGET_ACTION_NONE = "NONE"
+DC_BUDGET_ACTION_STOP_SCHEDULING_AND_CANCEL_TASKS = "STOP_SCHEDULING_AND_CANCEL_TASKS"
+DC_BUDGET_ACTION_STOP_SCHEDULING_AND_COMPLETE_TASKS = "STOP_SCHEDULING_AND_COMPLETE_TASKS"
 
 
 def get_shotgun(url=None, login=None, password=None, script_name=None, api_key=None):
@@ -68,7 +71,7 @@ def get_shotgun(url=None, login=None, password=None, script_name=None, api_key=N
     return None
 
 
-def send_budget_alert_note(farm_id=None, farm_name=None, farm_hostname=None, queue_name=None, budget_id=None, budget_limit=None):
+def send_budget_alert_note(farm_id=None, farm_name=None, farm_hostname=None, queue_name=None, budget_id=None, budget_limit=None, default_budget_action=None):
     """
     Create a budget notification addressed to a list of users on a ShotGrid project.
     
@@ -81,14 +84,33 @@ def send_budget_alert_note(farm_id=None, farm_name=None, farm_hostname=None, que
         queue_name: Deadline Cloud queue name
         budget_id: Deadline Cloud budget ID
         budget_limit: Deadline Cloud budget approximateDollarLimit
+        default_budget_action: Deadline Cloud budget defaultBudgetAction
     """
     
-    note_text = "Deadline Budget Alert:\n"
-    note_text += f"The queue {queue_name} on farm {farm_name} has stopped because it reached its budget limit of {budget_limit}.\n"
-    note_text += "\n"
-    note_text += f"Please update the budget limit to enable renders on this queue: https://{farm_hostname}/farms/{farm_id}/budget/{budget_id}/edit"
-    
-    note_subject = f"Deadline Cloud Budget Alert: {queue_name} stopped"
+    note_text = ""
+    note_subject = f"Deadline Cloud Budget Alert: {queue_name} reached its limit"
+    if default_budget_action in [
+        DC_BUDGET_ACTION_STOP_SCHEDULING_AND_CANCEL_TASKS,
+        DC_BUDGET_ACTION_STOP_SCHEDULING_AND_COMPLETE_TASKS
+    ]:
+        note_subject = f"Deadline Cloud Budget Alert: {queue_name} reached its limit and stopped"
+        note_text = "Deadline Budget Alert:\n"
+        note_text += f"The queue {queue_name} on farm {farm_name} has stopped because it reached its budget limit of {budget_limit}.\n"
+        note_text += "\n"
+        note_text += f"Please update the budget limit to enable renders on this queue: https://{farm_hostname}/farms/{farm_id}/budget/{budget_id}/edit"
+        
+    elif default_budget_action == DC_BUDGET_ACTION_NONE:
+        note_text = "Deadline Budget Alert:\n"
+        note_text += f"The queue {queue_name} on farm {farm_name} has reached its budget limit of {budget_limit}. The queue will continue processing jobs.\n"
+        note_text += "\n"
+        note_text += f"To update the budget limit on this queue: https://{farm_hostname}/farms/{farm_id}/budget/{budget_id}/edit"
+        
+    else:
+        logger.warning(f"Unknown default_budget_action: {default_budget_action}")
+        note_text = "Deadline Budget Alert:\n"
+        note_text += f"The queue {queue_name} on farm {farm_name} has reached its budget limit of {budget_limit}.\n"
+        note_text += "\n"
+        note_text += f"To update the budget limit on this queue: https://{farm_hostname}/farms/{farm_id}/budget/{budget_id}/edit"
     
     try:
         group = get_queue_group(queue_name)
@@ -156,7 +178,7 @@ def create_notification_groups(queues):
     queues_known = []
     try:
         for group in groups:
-            if f"{DEADLINE_CLOUD_NOTIFICATIONS_PREFIX}" in group["code"] and "queue-id:" in group["code"]:
+            if f"{DC_NOTIFICATIONS_PREFIX}" in group["code"] and "queue-id:" in group["code"]:
                 queues_known.append(group["code"].split("queue-id:")[-1].split(" ")[0])
         logger.debug(f"queues_known: {queues_known}")
     except:
@@ -190,7 +212,7 @@ def create_notification_group(queue):
     try:
         sg = get_shotgun()
         
-        group_name = "{} queue:{} queue-id:{}".format(DEADLINE_CLOUD_NOTIFICATIONS_PREFIX, queue["displayName"], queue["queueId"])
+        group_name = "{} queue:{} queue-id:{}".format(DC_NOTIFICATIONS_PREFIX, queue["displayName"], queue["queueId"])
         
         existing_group = sg.find_one("Group", filters=[["code", "contains", group_name]], fields=["code"])
         if existing_group:
@@ -222,7 +244,7 @@ def get_notification_groups():
     
     try:
         sg = get_shotgun()
-        result = sg.find("Group", filters=[["code", "contains", DEADLINE_CLOUD_NOTIFICATIONS_PREFIX]], fields=["code", "sg_group_project"])
+        result = sg.find("Group", filters=[["code", "contains", DC_NOTIFICATIONS_PREFIX]], fields=["code", "sg_group_project"])
     except:
         raise
     

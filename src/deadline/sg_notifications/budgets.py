@@ -188,7 +188,12 @@ class DeadlineCloudHelper(object):
                 logger.error(sys.exc_info())
                 continue
             
-            queue_name = [queue["displayName"] for queue in self.get_queues(farm["farmId"]) if queue["queueId"] == queue_id][0]
+            queue_name = None
+            default_budget_action = None
+            for queue in self.get_queues(farm["farmId"]):
+                if queue["queueId"] == queue_id:
+                    queue_name = queue["displayName"]
+                    default_budget_action = queue["defaultBudgetAction"]
             
             # Check if an alert for this budget limit has already been sent
             try:
@@ -199,9 +204,9 @@ class DeadlineCloudHelper(object):
                 logger.error(traceback.format_exc())
                 # continue
             
-            # Apply currency symbol to budget limit using the current OS locale
-            locale.setlocale(locale.LC_ALL, "")
-            budget_limit_formatted = locale.currency(budget["approximateDollarLimit"], grouping=True)
+            # Budgets in Deadline Cloud are always USD
+            # Apply dollar symbol to budget limit with commas as thousands separators
+            budget_limit_formatted = "${:0,.2f}".format(budget["approximateDollarLimit"])
             
             # Send an alert to the users monitoring this queue
             try:
@@ -211,7 +216,8 @@ class DeadlineCloudHelper(object):
                     farm_hostname=self.studio_hostname,
                     queue_name=queue_name,
                     budget_id=budget_id,
-                    budget_limit=budget_limit_formatted
+                    budget_limit=budget_limit_formatted,
+                    default_budget_action=default_budget_action
                 )
                 logger.debug(f"Sent note: {note}")
                 
